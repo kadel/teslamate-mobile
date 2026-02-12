@@ -1,6 +1,6 @@
 import React from 'react';
 import { Tabs } from 'expo-router';
-import { Car, Activity, Settings } from 'lucide-react-native';
+import { Car, Navigation, Zap, Settings } from 'lucide-react-native';
 import { CustomTabBar } from '@/components/ui/CustomTabBar';
 
 export default function TabLayout() {
@@ -19,10 +19,17 @@ export default function TabLayout() {
         }}
       />
       <Tabs.Screen
-        name="activity"
+        name="drives"
         options={{
-          title: 'Activity',
-          tabBarIcon: ({ color, size }) => <Activity color={color} size={size} />,
+          title: 'Drives',
+          tabBarIcon: ({ color, size }) => <Navigation color={color} size={size} />,
+        }}
+      />
+      <Tabs.Screen
+        name="charges"
+        options={{
+          title: 'Charges',
+          tabBarIcon: ({ color, size }) => <Zap color={color} size={size} />,
         }}
       />
       <Tabs.Screen

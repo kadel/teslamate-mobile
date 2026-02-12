@@ -88,6 +88,53 @@ export interface DriveWithDetails extends Drive {
   drive_details: DriveDetail[];
 }
 
+export interface Charge {
+  charge_id: number;
+  start_date: string;
+  end_date: string;
+  address: string;
+  charge_energy_added: number;
+  charge_energy_used: number;
+  cost: number | null;
+  duration_min: number;
+  battery_details: {
+    start_battery_level: number;
+    end_battery_level: number;
+  };
+  range_ideal: {
+    start_range: number;
+    end_range: number;
+  };
+  outside_temp_avg: number | null;
+  latitude: number;
+  longitude: number;
+}
+
+export interface ChargeDetail {
+  detail_id: number;
+  date: string;
+  battery_level: number;
+  charger_details: {
+    charger_power: number;
+    charger_voltage: number;
+    charger_actual_current: number;
+    charger_phases: number | null;
+  };
+  battery_info: {
+    ideal_battery_range: number;
+    battery_heater_on: boolean;
+  };
+  conn_charge_cable: string;
+  fast_charger_present: boolean;
+  fast_charger_brand: string | null;
+  fast_charger_type: string | null;
+  outside_temp: number | null;
+}
+
+export interface ChargeWithDetails extends Charge {
+  charge_details: ChargeDetail[];
+}
+
 export const fetchDriveDetails = async (carId: number, driveId: number): Promise<DriveWithDetails> => {
   const client = await createClient();
   const response = await client.get(`/api/v1/cars/${carId}/drives/${driveId}`);
@@ -110,6 +157,18 @@ export const fetchDrives = async (carId: number): Promise<Drive[]> => {
   const client = await createClient();
   const response = await client.get(`/api/v1/cars/${carId}/drives`);
   return response.data.data.drives;
+};
+
+export const fetchCharges = async (carId: number): Promise<Charge[]> => {
+  const client = await createClient();
+  const response = await client.get(`/api/v1/cars/${carId}/charges`);
+  return response.data.data.charges;
+};
+
+export const fetchChargeDetails = async (carId: number, chargeId: number): Promise<ChargeWithDetails> => {
+  const client = await createClient();
+  const response = await client.get(`/api/v1/cars/${carId}/charges/${chargeId}`);
+  return response.data.data.charge;
 };
 
 export const wakeUp = async (carId: number) => {

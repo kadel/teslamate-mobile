@@ -105,7 +105,7 @@ const DriveCard = ({ drive }: { drive: Drive }) => {
 };
 
 // ── Main Screen ───────────────────────────────────────
-export default function ActivityScreen() {
+export default function DrivesScreen() {
   const insets = useSafeAreaInsets();
 
   const { data: cars } = useQuery({
@@ -146,7 +146,7 @@ export default function ActivityScreen() {
         showsVerticalScrollIndicator={false}
         ListHeaderComponent={
           <Text style={{ fontSize: 28, fontWeight: '700', color: '#f5f5f5', marginBottom: 16 }}>
-            Activity
+            Drives
           </Text>
         }
         ListEmptyComponent={

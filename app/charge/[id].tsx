@@ -7,16 +7,15 @@ import { LineChart } from 'react-native-chart-kit';
 import { Text } from '@/components/Themed';
 import { GlassCard } from '@/components/ui/GlassCard';
 import { Skeleton } from '@/components/ui/Skeleton';
-import { fetchCars, fetchDriveDetails } from '@/lib/api';
+import { fetchCars, fetchChargeDetails } from '@/lib/api';
 import {
   ChevronLeft,
-  Navigation,
-  Clock,
   Zap,
+  Clock,
+  Coins,
   Thermometer,
   TrendingUp,
-  TrendingDown,
-  Gauge,
+  Plug,
 } from 'lucide-react-native';
 
 const screenWidth = Dimensions.get('window').width;
@@ -154,7 +153,7 @@ const ChartSection = ({
 };
 
 // ── Loading skeleton ──────────────────────────────────
-function DriveDetailSkeleton() {
+function ChargeDetailSkeleton() {
   return (
     <View className="flex-1 bg-surface-primary p-4" style={{ paddingTop: 60 }}>
       <Skeleton width="60%" height={24} borderRadius={8} className="mb-3" />
@@ -166,8 +165,16 @@ function DriveDetailSkeleton() {
   );
 }
 
+// ── Helpers ───────────────────────────────────────────
+function formatDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m} min`;
+  return `${h}h ${m}m`;
+}
+
 // ── Main screen ───────────────────────────────────────
-export default function DriveDetailsScreen() {
+export default function ChargeDetailsScreen() {
   const { id } = useLocalSearchParams();
   const router = useRouter();
   const insets = useSafeAreaInsets();
@@ -179,42 +186,43 @@ export default function DriveDetailsScreen() {
 
   const car = cars?.[0];
 
-  const { data: drive, isLoading } = useQuery({
-    queryKey: ['drive', car?.car_id, id],
-    queryFn: () => fetchDriveDetails(car!.car_id, Number(id)),
+  const { data: charge, isLoading } = useQuery({
+    queryKey: ['charge', car?.car_id, id],
+    queryFn: () => fetchChargeDetails(car!.car_id, Number(id)),
     enabled: !!car && !!id,
   });
 
   const chartData = useMemo(() => {
-    if (!drive?.drive_details) return null;
-    const details = drive.drive_details;
+    if (!charge?.charge_details) return null;
+    const details = charge.charge_details;
     const dates = details.map((d) => d.date);
 
-    const elevationPairs = details
-      .filter((d) => d.elevation !== null)
-      .map((d) => ({ value: d.elevation, date: d.date }));
-
-    const tempInsidePairs = details
-      .filter((d) => d.climate_info.inside_temp !== null)
-      .map((d) => ({ value: d.climate_info.inside_temp!, date: d.date }));
+    const rangePairs = details
+      .filter((d) => d.battery_info.ideal_battery_range != null)
+      .map((d) => ({ value: d.battery_info.ideal_battery_range, date: d.date }));
 
     return {
-      speed: details.map((d) => d.speed),
-      power: details.map((d) => d.power),
       battery: details.map((d) => d.battery_level),
+      power: details.map((d) => d.charger_details.charger_power),
+      voltage: details.map((d) => d.charger_details.charger_voltage),
+      current: details.map((d) => d.charger_details.charger_actual_current),
       dates,
-      elevation: elevationPairs.map((p) => p.value),
-      elevationDates: elevationPairs.map((p) => p.date),
-      tempInside: tempInsidePairs.map((p) => p.value),
-      tempInsideDates: tempInsidePairs.map((p) => p.date),
+      range: rangePairs.map((p) => p.value),
+      rangeDates: rangePairs.map((p) => p.date),
     };
-  }, [drive]);
+  }, [charge]);
 
-  if (isLoading || !drive) {
-    return <DriveDetailSkeleton />;
+  if (isLoading || !charge) {
+    return <ChargeDetailSkeleton />;
   }
 
-  const startDate = new Date(drive.start_date);
+  const startDate = new Date(charge.start_date);
+  const endDate = new Date(charge.end_date);
+  const efficiency =
+    charge.charge_energy_used > 0
+      ? ((charge.charge_energy_added / charge.charge_energy_used) * 100).toFixed(1)
+      : '--';
+  const cableType = charge.charge_details?.[0]?.conn_charge_cable || 'Unknown';
 
   return (
     <View className="flex-1 bg-surface-primary">
@@ -242,12 +250,12 @@ export default function DriveDetailsScreen() {
         >
           <ChevronLeft size={20} color="#f5f5f5" />
         </TouchableOpacity>
-        <View>
+        <View style={{ flex: 1 }}>
           <Text style={{ fontSize: 12, color: '#636366', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>
             {startDate.toLocaleDateString(undefined, { weekday: 'short', month: 'short', day: 'numeric' })}
           </Text>
-          <Text style={{ fontSize: 18, fontWeight: '700', color: '#f5f5f5' }}>
-            {startDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} Trip
+          <Text style={{ fontSize: 18, fontWeight: '700', color: '#f5f5f5' }} numberOfLines={1}>
+            {charge.address || 'Unknown'} Charge
           </Text>
         </View>
       </View>
@@ -257,59 +265,52 @@ export default function DriveDetailsScreen() {
         contentContainerStyle={{ paddingHorizontal: 16, paddingBottom: 40 }}
         showsVerticalScrollIndicator={false}
       >
-        {/* ── Route card ── */}
+        {/* ── Summary card ── */}
         <GlassCard className="p-5 mb-3">
-          <View style={{ flexDirection: 'row', alignItems: 'flex-start' }}>
-            <View style={{ alignItems: 'center', marginRight: 14 }}>
-              <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 3, borderColor: '#30d158', backgroundColor: '#141414' }} />
-              <View style={{ width: 1.5, height: 36, backgroundColor: '#2c2c2e', marginVertical: 4 }} />
-              <View style={{ width: 12, height: 12, borderRadius: 6, borderWidth: 3, borderColor: '#ff453a', backgroundColor: '#141414' }} />
-            </View>
-            <View style={{ flex: 1, justifyContent: 'space-between', height: 68, paddingVertical: 0 }}>
-              <View>
-                <Text style={{ fontSize: 10, color: '#636366', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Start
-                </Text>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#f5f5f5' }} numberOfLines={1}>
-                  {drive.start_address || 'Unknown'}
-                </Text>
-              </View>
-              <View>
-                <Text style={{ fontSize: 10, color: '#636366', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5 }}>
-                  Destination
-                </Text>
-                <Text style={{ fontSize: 14, fontWeight: '600', color: '#f5f5f5' }} numberOfLines={1}>
-                  {drive.end_address || 'Unknown'}
-                </Text>
-              </View>
+          <Text style={{ fontSize: 15, fontWeight: '700', color: '#f5f5f5', marginBottom: 8 }}>
+            {charge.address || 'Unknown Location'}
+          </Text>
+          <Text style={{ fontSize: 13, color: '#8e8e93', marginBottom: 4 }}>
+            {startDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+            {' → '}
+            {endDate.toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}
+          </Text>
+          <View className="flex-row items-center" style={{ marginTop: 4 }}>
+            <View style={{ backgroundColor: 'rgba(48, 209, 88, 0.15)', paddingHorizontal: 10, paddingVertical: 4, borderRadius: 8 }}>
+              <Text style={{ fontSize: 14, fontWeight: '700', color: '#30d158' }}>
+                {charge.battery_details.start_battery_level}% → {charge.battery_details.end_battery_level}%
+              </Text>
             </View>
           </View>
         </GlassCard>
 
         {/* ── Stats ── */}
         <GlassCard className="p-5 mb-3">
-          <StatRow label="Distance" value={drive.odometer_details.odometer_distance.toFixed(1)} unit="km" icon={Navigation} iconColor="#3b82f6" />
-          <StatRow label="Duration" value={drive.duration_min} unit="min" icon={Clock} iconColor="#8e8e93" />
-          <StatRow label="Energy" value={drive.energy_consumed_net?.toFixed(1) ?? '--'} unit="kWh" icon={Zap} iconColor="#ff9f0a" />
-          <StatRow label="Efficiency" value={drive.consumption_net?.toFixed(0) ?? '--'} unit="Wh/km" icon={TrendingDown} iconColor="#30d158" />
-          <StatRow label="Avg Speed" value={Math.round(drive.speed_avg ?? 0)} unit="km/h" icon={Gauge} iconColor="#bf5af2" />
-          <StatRow label="Max Speed" value={Math.round(drive.speed_max ?? 0)} unit="km/h" icon={TrendingUp} iconColor="#ff453a" />
+          <StatRow label="Energy Added" value={charge.charge_energy_added?.toFixed(1) ?? '--'} unit="kWh" icon={Zap} iconColor="#30d158" />
+          <StatRow label="Energy Used" value={charge.charge_energy_used?.toFixed(1) ?? '--'} unit="kWh" icon={Zap} iconColor="#ff9f0a" />
+          <StatRow label="Efficiency" value={efficiency} unit="%" icon={TrendingUp} iconColor="#3b82f6" />
+          <StatRow label="Duration" value={formatDuration(charge.duration_min)} icon={Clock} iconColor="#8e8e93" />
+          {charge.cost != null && charge.cost > 0 && (
+            <StatRow label="Cost" value={charge.cost.toFixed(2)} icon={Coins} iconColor="#3b82f6" />
+          )}
+          {charge.outside_temp_avg != null && (
+            <StatRow label="Outside Temp" value={Math.round(charge.outside_temp_avg)} unit="°C" icon={Thermometer} iconColor="#3b82f6" />
+          )}
+          <StatRow label="Cable Type" value={cableType} icon={Plug} iconColor="#8e8e93" />
         </GlassCard>
 
         {/* ── Charts ── */}
         {chartData && (
           <>
             <Text style={{ fontSize: 13, fontWeight: '600', color: '#636366', textTransform: 'uppercase', letterSpacing: 0.5, marginTop: 12, marginBottom: 10 }}>
-              Trip Charts
+              Charge Charts
             </Text>
-            <ChartSection title="Speed" data={chartData.speed} dates={chartData.dates} color="#3b82f6" unit=" km/h" />
-            <ChartSection title="Power" data={chartData.power} dates={chartData.dates} color="#ff453a" unit=" kW" />
-            {chartData.elevation.length > 1 && (
-              <ChartSection title="Elevation" data={chartData.elevation} dates={chartData.elevationDates} color="#30d158" unit=" m" />
-            )}
-            <ChartSection title="Battery" data={chartData.battery} dates={chartData.dates} color="#bf5af2" unit="%" />
-            {chartData.tempInside.length > 1 && (
-              <ChartSection title="Cabin Temp" data={chartData.tempInside} dates={chartData.tempInsideDates} color="#ff9f0a" unit=" °C" />
+            <ChartSection title="Battery Level" data={chartData.battery} dates={chartData.dates} color="#bf5af2" unit="%" />
+            <ChartSection title="Charger Power" data={chartData.power} dates={chartData.dates} color="#ff453a" unit=" kW" />
+            <ChartSection title="Voltage" data={chartData.voltage} dates={chartData.dates} color="#3b82f6" unit=" V" />
+            <ChartSection title="Current" data={chartData.current} dates={chartData.dates} color="#ff9f0a" unit=" A" />
+            {chartData.range.length > 1 && (
+              <ChartSection title="Range" data={chartData.range} dates={chartData.rangeDates} color="#30d158" unit=" km" />
             )}
           </>
         )}
