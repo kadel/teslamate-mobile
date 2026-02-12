@@ -1,45 +1,24 @@
 /**
- * Learn more about Light and Dark modes:
- * https://docs.expo.io/guides/color-schemes/
+ * Themed primitives — now NativeWind-friendly.
+ *
+ * The old implementation injected backgroundColor/color via the style prop,
+ * which always beats NativeWind's className-derived styles. These wrappers
+ * are now transparent by default so Tailwind utility classes work correctly.
+ * Only apply theme colors when no className overrides are provided.
  */
 
 import { Text as DefaultText, View as DefaultView } from 'react-native';
 
-import Colors from '@/constants/Colors';
-import { useColorScheme } from './useColorScheme';
-
-type ThemeProps = {
-  lightColor?: string;
-  darkColor?: string;
-};
-
-export type TextProps = ThemeProps & DefaultText['props'];
-export type ViewProps = ThemeProps & DefaultView['props'];
-
-export function useThemeColor(
-  props: { light?: string; dark?: string },
-  colorName: keyof typeof Colors.light & keyof typeof Colors.dark
-) {
-  const theme = useColorScheme() ?? 'light';
-  const colorFromProps = props[theme];
-
-  if (colorFromProps) {
-    return colorFromProps;
-  } else {
-    return Colors[theme][colorName];
-  }
-}
+export type TextProps = DefaultText['props'];
+export type ViewProps = DefaultView['props'];
 
 export function Text(props: TextProps) {
-  const { style, lightColor, darkColor, ...otherProps } = props;
-  const color = useThemeColor({ light: lightColor, dark: darkColor }, 'text');
-
-  return <DefaultText style={[{ color }, style]} {...otherProps} />;
+  const { style, ...rest } = props;
+  // Default to light text on dark bg; className can override
+  return <DefaultText style={[{ color: '#f5f5f5' }, style]} {...rest} />;
 }
 
 export function View(props: ViewProps) {
-  const { style, lightColor, darkColor, ...otherProps } = props;
-  const backgroundColor = useThemeColor({ light: lightColor, dark: darkColor }, 'background');
-
-  return <DefaultView style={[{ backgroundColor }, style]} {...otherProps} />;
+  // Fully transparent — let NativeWind handle backgrounds
+  return <DefaultView {...props} />;
 }

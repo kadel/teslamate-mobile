@@ -117,3 +117,9 @@ export const wakeUp = async (carId: number) => {
   const response = await client.post(`/api/v1/cars/${carId}/wake_up`);
   return response.data;
 };
+
+/** Quick connectivity check — fetches the cars list and throws on failure */
+export const testConnection = async (): Promise<void> => {
+  const client = await createClient();
+  await client.get('/api/v1/cars', { timeout: 10000 });
+};

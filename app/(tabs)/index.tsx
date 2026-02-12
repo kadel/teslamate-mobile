@@ -1,35 +1,137 @@
 import React from 'react';
-import { ScrollView, RefreshControl, TouchableOpacity } from 'react-native';
+import { ScrollView, RefreshControl, TouchableOpacity, View } from 'react-native';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Text, View } from '@/components/Themed';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { Text } from '@/components/Themed';
 import { fetchCars, fetchCarStatus, wakeUp } from '@/lib/api';
-import { Battery, Thermometer, MapPin, Lock, Unlock, Zap, Navigation } from 'lucide-react-native';
+import { BatteryRing } from '@/components/ui/BatteryRing';
+import { GlassCard } from '@/components/ui/GlassCard';
+import { StatusBadge } from '@/components/ui/StatusBadge';
+import { DashboardSkeleton } from '@/components/ui/Skeleton';
+import {
+  Thermometer,
+  MapPin,
+  Lock,
+  Unlock,
+  Zap,
+  Navigation,
+  Power,
+  Shield,
+} from 'lucide-react-native';
 
-const StatusCard = ({ title, value, icon: Icon, unit }: { title: string; value: string | number; icon: any; unit?: string }) => (
-  <View className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm w-[48%] mb-4">
+// ── Helpers ───────────────────────────────────────────
+function stateColor(state?: string): 'green' | 'blue' | 'orange' | 'gray' {
+  switch (state) {
+    case 'charging':
+      return 'green';
+    case 'driving':
+      return 'blue';
+    case 'updating':
+      return 'orange';
+    default:
+      return 'gray';
+  }
+}
+
+function stateLabel(state?: string): string {
+  if (!state) return 'Unknown';
+  return state.charAt(0).toUpperCase() + state.slice(1);
+}
+
+// ── Mini stat card ────────────────────────────────────
+const StatCard = ({
+  title,
+  value,
+  unit,
+  icon: Icon,
+  iconColor = '#8e8e93',
+}: {
+  title: string;
+  value: string | number;
+  unit?: string;
+  icon: any;
+  iconColor?: string;
+}) => (
+  <GlassCard className="flex-1 p-4">
     <View className="flex-row items-center mb-2">
-      <Icon size={16} color="#3b82f6" />
-      <Text className="text-gray-500 dark:text-gray-400 text-xs font-bold ml-2 uppercase">{title}</Text>
+      <Icon size={14} color={iconColor} />
+      <Text style={{ fontSize: 11, color: '#636366', fontWeight: '600', marginLeft: 6, textTransform: 'uppercase', letterSpacing: 0.5 }}>
+        {title}
+      </Text>
     </View>
-    <View className="flex-row items-baseline">
-      <Text className="text-xl font-bold">{value}</Text>
-      {unit && <Text className="text-gray-400 text-xs ml-1">{unit}</Text>}
+    <View style={{ flexDirection: 'row', alignItems: 'baseline' }}>
+      <Text style={{ fontSize: 20, fontWeight: '700', color: '#f5f5f5' }}>{value}</Text>
+      {unit && (
+        <Text style={{ fontSize: 12, color: '#636366', marginLeft: 3 }}>{unit}</Text>
+      )}
     </View>
-  </View>
+  </GlassCard>
 );
 
+// ── Charging banner ───────────────────────────────────
+const ChargingBanner = ({ details }: { details: any }) => (
+  <GlassCard className="mx-4 mb-4 p-5 border-tesla-green/20" style={{ borderColor: 'rgba(48, 209, 88, 0.2)' }}>
+    <View className="flex-row items-center mb-4">
+      <View style={{ backgroundColor: 'rgba(48, 209, 88, 0.15)', padding: 8, borderRadius: 10, marginRight: 10 }}>
+        <Zap size={18} color="#30d158" fill="#30d158" />
+      </View>
+      <Text style={{ fontSize: 16, fontWeight: '700', color: '#30d158' }}>Charging</Text>
+    </View>
+
+    <View className="flex-row flex-wrap">
+      <View style={{ width: '50%', marginBottom: 12 }}>
+        <Text style={{ fontSize: 10, color: '#636366', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Power</Text>
+        <Text style={{ fontSize: 22, fontWeight: '700', color: '#f5f5f5' }}>
+          {details?.charger_power ?? 0}
+          <Text style={{ fontSize: 13, color: '#636366' }}> kW</Text>
+        </Text>
+      </View>
+      <View style={{ width: '50%', marginBottom: 12, alignItems: 'flex-end' }}>
+        <Text style={{ fontSize: 10, color: '#636366', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Time Left</Text>
+        <Text style={{ fontSize: 22, fontWeight: '700', color: '#f5f5f5' }}>
+          {details?.time_to_full_charge ? `${details.time_to_full_charge.toFixed(1)}` : '--'}
+          <Text style={{ fontSize: 13, color: '#636366' }}> hrs</Text>
+        </Text>
+      </View>
+      <View style={{ width: '50%' }}>
+        <Text style={{ fontSize: 10, color: '#636366', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>Added</Text>
+        <Text style={{ fontSize: 22, fontWeight: '700', color: '#f5f5f5' }}>
+          {details?.charge_energy_added?.toFixed(1) ?? 0}
+          <Text style={{ fontSize: 13, color: '#636366' }}> kWh</Text>
+        </Text>
+      </View>
+      <View style={{ width: '50%', alignItems: 'flex-end' }}>
+        <Text style={{ fontSize: 10, color: '#636366', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>V / A</Text>
+        <Text style={{ fontSize: 22, fontWeight: '700', color: '#f5f5f5' }}>
+          {details?.charger_voltage ?? 0}
+          <Text style={{ fontSize: 13, color: '#636366' }}>V</Text>
+          {' / '}
+          {details?.charger_actual_current ?? 0}
+          <Text style={{ fontSize: 13, color: '#636366' }}>A</Text>
+        </Text>
+      </View>
+    </View>
+  </GlassCard>
+);
+
+// ── Main Dashboard ────────────────────────────────────
 export default function DashboardScreen() {
+  const insets = useSafeAreaInsets();
   const queryClient = useQueryClient();
 
-  const { data: cars, isLoading: loadingCars, refetch: refetchCars } = useQuery({
-    queryKey: ['cars'],
-    queryFn: fetchCars,
-  });
+  const {
+    data: cars,
+    isLoading: loadingCars,
+    refetch: refetchCars,
+  } = useQuery({ queryKey: ['cars'], queryFn: fetchCars });
 
   const car = cars?.[0];
 
-  const { data: status, isLoading: loadingStatus, refetch: refetchStatus } = useQuery({
+  const {
+    data: status,
+    isLoading: loadingStatus,
+    refetch: refetchStatus,
+  } = useQuery({
     queryKey: ['car-status', car?.car_id],
     queryFn: () => fetchCarStatus(car!.car_id),
     enabled: !!car,
@@ -38,9 +140,7 @@ export default function DashboardScreen() {
 
   const wakeMutation = useMutation({
     mutationFn: () => wakeUp(car!.car_id),
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['car-status', car?.car_id] });
-    },
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['car-status', car?.car_id] }),
   });
 
   const onRefresh = React.useCallback(() => {
@@ -48,147 +148,148 @@ export default function DashboardScreen() {
     if (car) refetchStatus();
   }, [car, refetchCars, refetchStatus]);
 
+  // ── Loading state ──
   if (loadingCars) {
-    return (
-      <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-black">
-        <Text>Loading car data...</Text>
-      </View>
-    );
+    return <DashboardSkeleton />;
   }
 
+  // ── No car state ──
   if (!car) {
     return (
-      <View className="flex-1 items-center justify-center bg-gray-50 dark:bg-black p-6">
-        <Text className="text-lg font-bold mb-2">No cars found</Text>
-        <Text className="text-gray-500 text-center">
-          Make sure your API URL and Token are correct in Settings.
+      <View className="flex-1 bg-surface-primary items-center justify-center px-8" style={{ paddingTop: insets.top }}>
+        <View style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', padding: 20, borderRadius: 24, marginBottom: 20 }}>
+          <Navigation size={40} color="#3b82f6" />
+        </View>
+        <Text style={{ fontSize: 20, fontWeight: '700', color: '#f5f5f5', marginBottom: 8, textAlign: 'center' }}>
+          No cars found
+        </Text>
+        <Text style={{ fontSize: 15, color: '#8e8e93', textAlign: 'center', lineHeight: 22 }}>
+          Make sure your TeslaMate API URL and Token are configured correctly in Settings.
         </Text>
       </View>
     );
   }
 
   const isCharging = status?.charging_details?.charging_state === 'charging';
+  const batteryLevel = status?.battery_details?.battery_level ?? 0;
+  const rangeKm = status?.battery_details?.ideal_battery_range?.toFixed(0);
 
   return (
-    <ScrollView 
-      className="flex-1 bg-gray-50 dark:bg-black"
-      refreshControl={<RefreshControl refreshing={loadingStatus} onRefresh={onRefresh} />}
+    <ScrollView
+      className="flex-1 bg-surface-primary"
+      contentContainerStyle={{ paddingTop: insets.top + 16, paddingBottom: 32 }}
+      refreshControl={
+        <RefreshControl
+          refreshing={loadingStatus}
+          onRefresh={onRefresh}
+          tintColor="#636366"
+        />
+      }
+      showsVerticalScrollIndicator={false}
     >
-      <View className="bg-blue-600 p-6 rounded-b-[40px] shadow-lg mb-6">
-        <View className="flex-row justify-between items-start mb-8">
+      {/* ── Header ── */}
+      <View className="px-5 mb-2">
+        <View className="flex-row justify-between items-start">
           <View>
-            <Text className="text-blue-100 text-sm font-bold uppercase tracking-widest">Your Tesla</Text>
-            <Text className="text-white text-3xl font-bold">{car.name}</Text>
-            <Text className="text-blue-200 text-sm capitalize">{status?.state || 'Status unknown'}</Text>
-          </View>
-          <View className="bg-blue-500/30 p-3 rounded-2xl">
-            <Battery size={32} color="white" />
-          </View>
-        </View>
-
-        <View className="flex-row items-end">
-          <Text className="text-white text-6xl font-bold">{status?.battery_details?.battery_level ?? '--'}</Text>
-          <Text className="text-blue-200 text-2xl font-bold mb-2 ml-1">%</Text>
-          {isCharging && (
-            <View className="ml-4 mb-2 flex-row items-center bg-green-400 px-3 py-1 rounded-full">
-              <Zap size={14} color="white" />
-              <Text className="text-white font-bold text-xs ml-1">Charging</Text>
-            </View>
-          )}
-        </View>
-        
-        <View className="mt-6 flex-row justify-between items-center">
-          <View>
-            <Text className="text-blue-100 text-xs font-bold uppercase">Estimated Range</Text>
-            <Text className="text-white text-lg font-bold">{status?.battery_details?.ideal_battery_range?.toFixed(0) ?? '--'} km</Text>
-          </View>
-          <TouchableOpacity 
-            className="bg-white/20 px-6 py-3 rounded-full"
-            onPress={() => wakeMutation.mutate()}
-            disabled={wakeMutation.isPending}
-          >
-            <Text className="text-white font-bold">{wakeMutation.isPending ? 'Waking...' : 'Wake Up'}</Text>
-          </TouchableOpacity>
-        </View>
-      </View>
-
-      {/* Charging Details Section */}
-      {isCharging && (
-        <View className="px-4 mb-6">
-          <View className="bg-green-50 dark:bg-green-900/20 p-6 rounded-[32px] border border-green-100 dark:border-green-900/30">
-            <View className="flex-row items-center mb-4">
-              <View className="bg-green-500 p-2 rounded-full mr-3">
-                <Zap size={18} color="white" />
-              </View>
-              <Text className="text-green-800 dark:text-green-400 font-bold text-lg">Charging Details</Text>
-            </View>
-            
-            <View className="flex-row justify-between flex-wrap">
-              <View className="w-1/2 mb-4">
-                <Text className="text-green-700/60 dark:text-green-400/60 text-xs font-bold uppercase mb-1">Power</Text>
-                <Text className="text-green-900 dark:text-green-100 text-xl font-bold">{status?.charging_details?.charger_power ?? 0} kW</Text>
-              </View>
-              <View className="w-1/2 mb-4">
-                <Text className="text-green-700/60 dark:text-green-400/60 text-xs font-bold uppercase mb-1 text-right">Time Remaining</Text>
-                <Text className="text-green-900 dark:text-green-100 text-xl font-bold text-right">
-                  {status?.charging_details?.time_to_full_charge ? `${status.charging_details.time_to_full_charge.toFixed(1)} hrs` : '--'}
-                </Text>
-              </View>
-              <View className="w-1/2">
-                <Text className="text-green-700/60 dark:text-green-400/60 text-xs font-bold uppercase mb-1">Added</Text>
-                <Text className="text-green-900 dark:text-green-100 text-xl font-bold">{status?.charging_details?.charge_energy_added?.toFixed(1) ?? 0} kWh</Text>
-              </View>
-              <View className="w-1/2">
-                <Text className="text-green-700/60 dark:text-green-400/60 text-xs font-bold uppercase mb-1 text-right">Voltage / Current</Text>
-                <Text className="text-green-900 dark:text-green-100 text-xl font-bold text-right">
-                  {status?.charging_details?.charger_voltage ?? 0}V / {status?.charging_details?.charger_actual_current ?? 0}A
-                </Text>
-              </View>
-            </View>
-          </View>
-        </View>
-      )}
-
-      <View className="px-4 flex-row flex-wrap justify-between">
-        <StatusCard 
-          title="Inside Temp" 
-          value={status?.climate_details?.inside_temp?.toFixed(1) ?? '--'} 
-          unit="°C" 
-          icon={Thermometer} 
-        />
-        <StatusCard 
-          title="Outside Temp" 
-          value={status?.climate_details?.outside_temp?.toFixed(1) ?? '--'} 
-          unit="°C" 
-          icon={Thermometer} 
-        />
-        <StatusCard 
-          title="Odometer" 
-          value={status?.odometer ? Math.round(status.odometer).toLocaleString() : '--'} 
-          unit="km" 
-          icon={Navigation} 
-        />
-        <StatusCard 
-          title="Status" 
-          value={status?.car_status?.locked ? 'Locked' : 'Unlocked'} 
-          icon={status?.car_status?.locked ? Lock : Unlock} 
-        />
-      </View>
-
-      <View className="px-4 mb-10">
-        <View className="bg-white dark:bg-gray-900 p-4 rounded-2xl shadow-sm flex-row items-center">
-          <View className="bg-blue-100 dark:bg-blue-900/40 p-3 rounded-xl mr-4">
-            <MapPin size={24} color="#3b82f6" />
-          </View>
-          <View className="flex-1">
-            <Text className="text-xs font-bold text-gray-400 uppercase">Current Location</Text>
-            <Text className="text-gray-900 dark:text-white font-semibold" numberOfLines={1}>
-              {status?.car_geodata?.latitude && status?.car_geodata?.longitude ? 
-                `${status.car_geodata.latitude.toFixed(4)}, ${status.car_geodata.longitude.toFixed(4)}` : 
-                'Location unknown'}
+            <Text style={{ fontSize: 14, color: '#636366', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 1 }}>
+              Your Tesla
+            </Text>
+            <Text style={{ fontSize: 28, fontWeight: '700', color: '#f5f5f5', marginTop: 2 }}>
+              {car.name}
             </Text>
           </View>
+          <StatusBadge label={stateLabel(status?.state)} color={stateColor(status?.state)} />
         </View>
+      </View>
+
+      {/* ── Battery Ring ── */}
+      <View className="items-center my-6">
+        <BatteryRing
+          level={batteryLevel}
+          size={210}
+          strokeWidth={12}
+          isCharging={isCharging}
+          rangeText={rangeKm ? `${rangeKm} km range` : undefined}
+        />
+      </View>
+
+      {/* ── Charging banner ── */}
+      {isCharging && <ChargingBanner details={status?.charging_details} />}
+
+      {/* ── Stat grid ── */}
+      <View className="px-4 mb-3 flex-row gap-3">
+        <StatCard
+          title="Inside"
+          value={status?.climate_details?.inside_temp?.toFixed(1) ?? '--'}
+          unit="°C"
+          icon={Thermometer}
+          iconColor="#ff9f0a"
+        />
+        <StatCard
+          title="Outside"
+          value={status?.climate_details?.outside_temp?.toFixed(1) ?? '--'}
+          unit="°C"
+          icon={Thermometer}
+          iconColor="#3b82f6"
+        />
+      </View>
+
+      <View className="px-4 mb-3 flex-row gap-3">
+        <StatCard
+          title="Odometer"
+          value={status?.odometer ? Math.round(status.odometer).toLocaleString() : '--'}
+          unit="km"
+          icon={Navigation}
+        />
+        <StatCard
+          title="Security"
+          value={status?.car_status?.locked ? 'Locked' : 'Unlocked'}
+          icon={status?.car_status?.locked ? Lock : Unlock}
+          iconColor={status?.car_status?.locked ? '#30d158' : '#ff9f0a'}
+        />
+      </View>
+
+      {/* ── Location ── */}
+      <View className="px-4 mb-4">
+        <GlassCard className="p-4 flex-row items-center">
+          <View style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)', padding: 10, borderRadius: 12, marginRight: 12 }}>
+            <MapPin size={20} color="#3b82f6" />
+          </View>
+          <View className="flex-1">
+            <Text style={{ fontSize: 10, color: '#636366', fontWeight: '600', textTransform: 'uppercase', letterSpacing: 0.5, marginBottom: 2 }}>
+              Location
+            </Text>
+            <Text style={{ fontSize: 14, fontWeight: '600', color: '#f5f5f5' }} numberOfLines={1}>
+              {status?.car_geodata?.latitude && status?.car_geodata?.longitude
+                ? `${status.car_geodata.latitude.toFixed(4)}, ${status.car_geodata.longitude.toFixed(4)}`
+                : 'Unknown'}
+            </Text>
+          </View>
+        </GlassCard>
+      </View>
+
+      {/* ── Sentry + Wake ── */}
+      <View className="px-4 flex-row gap-3">
+        <GlassCard className="flex-1 p-4 flex-row items-center">
+          <Shield size={18} color={status?.car_status?.sentry_mode ? '#30d158' : '#636366'} />
+          <Text style={{ fontSize: 13, fontWeight: '600', color: '#f5f5f5', marginLeft: 8 }}>
+            Sentry {status?.car_status?.sentry_mode ? 'On' : 'Off'}
+          </Text>
+        </GlassCard>
+
+        <TouchableOpacity
+          className="flex-1"
+          onPress={() => wakeMutation.mutate()}
+          disabled={wakeMutation.isPending}
+          activeOpacity={0.7}
+        >
+          <GlassCard className="p-4 flex-row items-center justify-center" style={{ borderColor: 'rgba(59, 130, 246, 0.3)' }}>
+            <Power size={18} color="#3b82f6" />
+            <Text style={{ fontSize: 13, fontWeight: '600', color: '#3b82f6', marginLeft: 8 }}>
+              {wakeMutation.isPending ? 'Waking…' : 'Wake Up'}
+            </Text>
+          </GlassCard>
+        </TouchableOpacity>
       </View>
     </ScrollView>
   );
